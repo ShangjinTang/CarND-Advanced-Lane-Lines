@@ -1,39 +1,85 @@
 ## Advanced Lane Finding
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
-![Lanes Image](./examples/example_output.jpg)
 
-In this project, your goal is to write a software pipeline to identify the lane boundaries in a video, but the main output or product we want you to create is a detailed writeup of the project.  Check out the [writeup template](https://github.com/udacity/CarND-Advanced-Lane-Lines/blob/master/writeup_template.md) for this project and use it as a starting point for creating your own writeup.  
+This project is to find lanes on the road for car while driving.
 
-Creating a great writeup:
----
-A great writeup should include the rubric points as well as your description of how you addressed each point.  You should include a detailed description of the code used in each step (with line-number references and code snippets where necessary), and links to other supporting documents or external references.  You should include images in your writeup to demonstrate how your code works with examples.  
+## Camera Calibration
 
-All that said, please be concise!  We're not looking for you to write a book here, just a brief description of how you passed each rubric point, and references to the relevant code :). 
+### Calculate camera matrix and distortion coefficients
 
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup.
+To compute matrix, we use chessboard image files under the folder `camera_cal`.
 
-The Project
----
+Note we are using `nx=9` and `ny=6` for chessboard images.
 
-The goals / steps of this project are the following:
+First we need to find chessboard corners using `cv2.findChessboardCorners()`, then calculate the camera matrix `mtx` and distortion coefficients `dist` with `cv2.calibrateCamera()`.
 
-* Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
-* Apply a distortion correction to raw images.
-* Use color transforms, gradients, etc., to create a thresholded binary image.
-* Apply a perspective transform to rectify binary image ("birds-eye view").
-* Detect lane pixels and fit to find the lane boundary.
-* Determine the curvature of the lane and vehicle position with respect to center.
-* Warp the detected lane boundaries back onto the original image.
-* Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
+After `mtx` and `dist` are calculated, we can undistort the image with `cv2.undistort()`.
 
-The images for camera calibration are stored in the folder called `camera_cal`.  The images in `test_images` are for testing your pipeline on single frames.  If you want to extract more test images from the videos, you can simply use an image writing method like `cv2.imwrite()`, i.e., you can read the video in frame by frame as usual, and for frames you want to save for later you can write to an image file.  
+An example of undistort image:
 
-To help the reviewer examine your work, please save examples of the output from each stage of your pipeline in the folder called `output_images`, and include a description in your writeup for the project of what each image shows.    The video called `project_video.mp4` is the video your pipeline should work well on.  
+![](./demos/camera_calibration_criteria.png)
 
-The `challenge_video.mp4` video is an extra (and optional) challenge for you if you want to test your pipeline under somewhat trickier conditions.  The `harder_challenge.mp4` video is another optional challenge and is brutal!
+For the code, please refer to **AdvancedLaneLines.ipynb** notebook: Camera Calibration.
 
-If you're feeling ambitious (again, totally optional though), don't stop there!  We encourage you to go out and take video of your own, calibrate your camera and show us how you would implement this project from scratch!
+## Pipeline (test images)
 
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
+### Generate Distorion-Corrected Image
 
+An example of a distortion-corrected image:
+
+![](./demos/pipeline_test_images_criteria1.png)
+
+### 2. Generate Threshold Binary Image
+
+Threshold binary image is a mixed decision of gradient binary (at X axis), direction binary, magnitude binary and hls binary (with S colorspace) .
+
+![](./demos/pipeline_test_images_criteria2.png)
+
+### Perspective Transform
+
+For perspective transform, we need to use the perspective transform matrix `M` which is calculated by `cv2.getPerspectiveTransform()` with 4 source coordinates and 4 target coordinates of straight line images.
+
+The we can apply it to the curved line images with `cv2.warpPerspective()`, such as below:
+
+![](./demos/pipeline_test_images_criteria3.png)
+
+### Lane-Line with Polynomial
+
+Generate with `np.polyfit()` with left side image and right side image.
+
+We seperate this to several windows at Y axis with margin (margin is to avoid big error on X-axis).
+
+Below is an image with polynomial fit:
+
+![](./demos/pipeline_test_images_criteria4.png)
+
+### Radius Curvature, Distance to middle, and Lane Lines
+
+For radius curative, we use the formula of (Radius Curvature)[https://en.wikipedia.org/wiki/Radius_of_curvature].
+
+To calculate the distance and radius curvature of real world, we need to specify the relationship between pixels and real-world distance.
+
+Here we use `xm_per_pix` and `ym_per_pix` for the real distance of one pixel at X-axis and Y-axis respectivelly.
+
+Distance to the middle lane, is the distance the middle of two lane lines and the middle of the image.
+
+Here I use `cv2.putText()` to generate the output image:
+
+![](./demos/pipeline_test_images_criteria5_6.png)
+
+We also example image of your result plotted back down onto the road.
+
+The pipeline is implemented with function `generate_detected_image()`.
+
+## Pipeline (video)
+
+Video output after we use `generate_detected_image()` for all frames:
+
+`./challenge_video-output.mp4`
+
+## Problems
+
+- The hyperparameter of binary threshold is difficult to tune.
+- The other lanes might also be recognized as lane line.
+- Some times there is only 1 lane detected on left side for video; and there's no lane detected at right side.
+
+Maybe we can use CNN (such as YOLO) with ROI to generate more robust lane line images.
